@@ -1,0 +1,5 @@
+# Testing
+test/
+coverage/
+jest.config.js
+*.test.ts
