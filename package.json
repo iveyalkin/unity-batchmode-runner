@@ -17,9 +17,6 @@
         "test:integration": "jest test/integration/*.integration.test.ts",
         "test:all": "jest"
     },
-    "publishConfig": {
-        "registry": "https://npm.pkg.github.com/"
-    },
     "repository": {
         "type": "git",
         "url": "https://github.com/iveyalkin/unity-batchmode-runner.git"
