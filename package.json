@@ -20,6 +20,10 @@
     "publishConfig": {
         "registry": "https://npm.pkg.github.com/"
     },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/iveyalkin/unity-batchmode-runner.git"
+    },
     "devDependencies": {
         "typescript": "^4.1.2",
         "jest": "^26.6.3",
