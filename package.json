@@ -1,5 +1,5 @@
 {
-    "name": "@iv/unity-batchmode-runner",
+    "name": "@op6yz/unity-batchmode-runner",
     "version": "0.0.1",
     "description": "Unity batchmode runner, that wraps Unity3D batchmode CLI handling stdout and stderr",
     "main": "dist/main.js",
