@@ -10,6 +10,8 @@ export interface ILogInsight {
     *  Note an arbitrary hint.
     */
     push(insight: string): void;
+
+    getInsights(): string[];
 }
 
 export class LogProcessor implements unity.ILogProcessor {
@@ -27,18 +29,27 @@ export class ErrorLogProcessor implements unity.IErrorLogProcessor {
 }
 
 export class LogValidator implements ILogInsight {
-    public readonly insights: string[] = [];
+    private readonly keywords?: string[];
+    private readonly insights: string[] = [];
 
-    constructor(
-        private readonly keywords?: string[],
+    constructor(keywords?: string[],
         private readonly rule?: RegExp
-    ) {}
+    ) {
+        this.keywords = keywords
+            ? [ ...new Set(keywords?.map(kw => kw.toLowerCase()))]
+            : keywords;
+    }
+
+    getInsights(): string[] {
+        return this.insights;
+    }
 
     push(insight: string): void {
         this.insights.push(insight);
     }
 
     lookup(outputStr: string): boolean {
+        outputStr = outputStr.toLowerCase();
         if (this.keywords)
             if (this.keywords.some(kw => outputStr.includes(kw)))
                 return true;
@@ -61,8 +72,6 @@ export class DefaultLogProcessor extends LogProcessor {
             const headline = headlineEndIndex > 0
                 ? outputStr.slice(0, headlineEndIndex).trim()
                 : outputStr.trim();
-
-                console.log(`headline: ${this.validator}`);
     
             if (this.validator?.lookup(outputStr))
                 this.validator.push(headline);

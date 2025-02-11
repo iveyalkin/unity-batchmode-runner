@@ -13,13 +13,11 @@ async function main() {
 
     const outLogProcessor = new processors.DefaultLogProcessor("", "", outValidator);
     const errLogProcessor = new processors.DefaultErrorLogProcessor();
-    const runner = new unity.UnityRunner(outLogProcessor, errLogProcessor);
+    const runner = new unity.UnityRunner({stdoutLogProcessor: outLogProcessor, stderrLogProcessor: errLogProcessor});
 
     await runner.runUnityBatchmode(["error from the hallway"]);
 
-    if (outValidator.insights.length > 0) {
-        console.log(`Insights:\n\t- ${outValidator.insights.join("\n\t- ")}\n`);
-    }
+    console.log(`Insights:\n\t- ${outValidator.getInsights().join("\n\t- ")}\n`);
 
     await runner.cleanup();
 }

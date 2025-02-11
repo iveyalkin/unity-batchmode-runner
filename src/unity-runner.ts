@@ -1,6 +1,7 @@
 import fs from "fs";
 import { spawn } from "child_process";
 import path from "path";
+import * as stream from "stream";
 
 export interface ILogProcessor {
     process(outputStr: string): string;
@@ -10,19 +11,41 @@ export interface IErrorLogProcessor {
     process(error: Error): string;
 }
 
-export class UnityRunner {
-    private stdoutLog: fs.WriteStream;
-    private stderrLog: fs.WriteStream;
+export interface UnityRunnerOptions {
+    stdoutLogProcessor: ILogProcessor;
+    stderrLogProcessor: IErrorLogProcessor;
+    unityExecutable?: string;
+    outputLogDir?: string;
+    stdoutLog?: stream.Writable;
+    stderrLog?: stream.Writable;
+}
 
-    constructor(
-        private readonly stdoutLogProcessor: ILogProcessor,
-        private readonly stderrLogProcessor: IErrorLogProcessor,
-        outputLogDir: string = "./out",
-        private readonly unityCommand: string = process.env.UNITY_PATH ?? "unity"
-    ) {
+export class UnityRunner {
+    private readonly stdoutLogProcessor: ILogProcessor;
+    private readonly stderrLogProcessor: IErrorLogProcessor;
+    private readonly unityCommand: string = process.env.UNITY_PATH ?? "unity";
+    private readonly stdoutLog: stream.Writable;
+    private readonly stderrLog: stream.Writable;
+
+    constructor({
+        stdoutLogProcessor,
+        stderrLogProcessor,
+        stdoutLog,
+        stderrLog,
+        outputLogDir = "./out",
+        unityExecutable = process.env.UNITY_PATH ?? "unity"
+    }: UnityRunnerOptions) {
+        this.stdoutLogProcessor = stdoutLogProcessor;
+        this.stderrLogProcessor = stderrLogProcessor;
+        this.unityCommand = unityExecutable ?? this.unityCommand;
+
         const outDirPath = fs.mkdirSync(outputLogDir, { recursive: true }) ?? outputLogDir;
-        this.stdoutLog = fs.createWriteStream(path.join(outDirPath, "stdout.log"), { encoding: 'utf8' });
-        this.stderrLog = fs.createWriteStream(path.join(outDirPath, "stderr.log"), { encoding: 'utf8' });
+        this.stdoutLog = stdoutLog
+            ? stdoutLog
+            : fs.createWriteStream(path.join(outDirPath, "stdout.log"), { encoding: 'utf8' });
+        this.stderrLog = stderrLog
+            ? stderrLog
+            : fs.createWriteStream(path.join(outDirPath, "stderr.log"), { encoding: 'utf8' });
     }
 
     public async cleanup(): Promise<void> {
