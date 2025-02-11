@@ -8,7 +8,8 @@ jobs:
       id-token: write
       contents: read
       packages: write
-
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,6 +25,7 @@ jobs:
         run: npm ci
 
       - name: Build package
+        run: npm run build
+
+      - name: Publish package
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -33,7 +33,7 @@ export class UnityRunner {
         stdoutLog,
         stderrLog,
         outputLogDir = "./out",
-        unityExecutable = process.env.UNITY_PATH ?? "unity"
+        unityExecutable = process.env.UNITY_EXECUTABLE ?? "unity"
     }: UnityRunnerOptions) {
         this.stdoutLogProcessor = stdoutLogProcessor;
         this.stderrLogProcessor = stderrLogProcessor;
