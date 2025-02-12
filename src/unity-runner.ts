@@ -1,5 +1,5 @@
 import fs from "fs";
-import { spawn } from "child_process";
+import { spawn, SpawnOptionsWithStdioTuple, StdioPipe, StdioNull } from "child_process";
 import path from "path";
 import * as stream from "stream";
 
@@ -18,6 +18,7 @@ export interface UnityRunnerOptions {
     outputLogDir?: string;
     stdoutLog?: stream.Writable;
     stderrLog?: stream.Writable;
+    shell?: boolean | "bash" | "sh" | "zsh" | string;
 }
 
 export class UnityRunner {
@@ -27,13 +28,20 @@ export class UnityRunner {
     private readonly stdoutLog: stream.Writable;
     private readonly stderrLog: stream.Writable;
 
+    private readonly spawnOptions: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe> = {
+        detached: false,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: process.env
+    };
+
     constructor({
         stdoutLogProcessor,
         stderrLogProcessor,
         stdoutLog,
         stderrLog,
         outputLogDir = "./out",
-        unityExecutable = process.env.UNITY_EXECUTABLE ?? "unity"
+        unityExecutable = process.env.UNITY_EXECUTABLE ?? "unity",
+        shell = false
     }: UnityRunnerOptions) {
         this.stdoutLogProcessor = stdoutLogProcessor;
         this.stderrLogProcessor = stderrLogProcessor;
@@ -46,6 +54,8 @@ export class UnityRunner {
         this.stderrLog = stderrLog
             ? stderrLog
             : fs.createWriteStream(path.join(outDirPath, "stderr.log"), { encoding: 'utf8' });
+
+        this.spawnOptions.shell = shell;
     }
 
     public async cleanup(): Promise<void> {
@@ -57,7 +67,7 @@ export class UnityRunner {
                     try {
                         this.stdoutLog.end(() => resolve());
                     } catch (exception) {
-                        console.error(`Failed to close stdout.log: ${exception}`);
+                        process.stderr.write(`Failed to close stdout.log: ${exception}\n`);
                         resolve();
                     }
                 })
@@ -70,7 +80,7 @@ export class UnityRunner {
                     try {
                         this.stderrLog.end(() => resolve());
                     } catch (exception) {
-                        console.error(`Failed to close stderr.log: ${exception}`);
+                        process.stderr.write(`Failed to close stderr.log: ${exception}\n`);
                         resolve();
                     }
                 })
@@ -86,12 +96,7 @@ export class UnityRunner {
             processArgs.push(...args.map(arg => `-${arg.trim()}`));
         }
 
-        const options = {
-            detached: false,
-            env: process.env
-        };
-
-        const childProcess = spawn(this.unityCommand, processArgs, options);
+        const childProcess = spawn(this.unityCommand, processArgs, this.spawnOptions);
 
         childProcess.stdout.setEncoding('utf8');
         childProcess.stderr.setEncoding('utf8');
@@ -101,17 +106,17 @@ export class UnityRunner {
 
             if (errorStr.length === 0) return;
 
-            console.error(errorStr);
+            process.stderr.write(errorStr);
 
             try {
                 if (!this.stderrLog.write(`${error}`, (subError) => {
                     if (subError)
-                        console.error(`Failed to write to stderr.log: ${subError}`);
+                        process.stderr.write(`Failed to write to stderr.log: ${subError}\n`);
                 })) {
-                    console.error("Failed to write to stderr.log");
+                    process.stderr.write("Failed to write to stderr.log\n");
                 }
             } catch (exception) {
-                console.error(`Failed to write to stderr.log: ${exception}`);
+                process.stderr.write(`Failed to write to stderr.log: ${exception}\n`);
             }
         });
 
@@ -120,34 +125,34 @@ export class UnityRunner {
             const outputStr = this.stdoutLogProcessor.process(dataString);
 
             if (outputStr.length === 0) return;
-            
-            console.log(outputStr);
+
+            process.stdout.write(outputStr);
 
             try {
                 if (!this.stdoutLog.write(dataString, (subError) => {
                     if (subError)
-                        console.error(`Failed to write to stdout.log: ${subError}`);
+                        process.stderr.write(`Failed to write to stdout.log: ${subError}\n`);
                 })) {
-                    console.error("Failed to write to stdout.log");
+                    process.stderr.write("Failed to write to stdout.log\n");
                 }
             } catch (exception) {
-                console.error(`Failed to write to stdout.log: ${exception}`);
+                process.stderr.write(`Failed to write to stdout.log: ${exception}\n`);
             }
         });
 
         return await new Promise((resolve, _) => {
             childProcess.on("exit", (code) => {
-                console.log(`Unity Batchmode process exited with code ${code}`);
+                process.stdout.write(`Unity Batchmode process exited with code ${code}\n`);
                 if (code !== null) {
                     resolve(code);
                 } else {
-                    console.log("Unity Batchmode process exited with undefined code. Default to 0");
+                    process.stdout.write("Unity Batchmode process exited with undefined code. Default to 0\n");
                     resolve(0);
                 }
             });
 
             childProcess.on("error", (error) => {
-                console.error(`Error: ${error}`);
+                process.stderr.write(`Error: ${error}\n`);
                 resolve(-1);
             });
         });
