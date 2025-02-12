@@ -18,11 +18,11 @@ describe('UnityRunner Integration', () => {
     beforeEach(() => {
         // Use 'echo' as mock Unity command for testing
         process.env.UNITY_PATH = process.platform === 'win32' ? 'cmd' : 'echo';
-        runner = new UnityRunner(
-            testLogProcessor,
-            testErrorProcessor,
-            testOutputDir
-        );
+        runner = new UnityRunner({
+            stdoutLogProcessor: testLogProcessor,
+            stderrLogProcessor: testErrorProcessor,
+            outputLogDir: testOutputDir
+        });
     });
 
     afterEach(async () => {
@@ -57,11 +57,11 @@ describe('UnityRunner Integration', () => {
 
     it('should handle command not found error', async () => {
         process.env.UNITY_PATH = 'non-existent-command';
-        const errorRunner = new UnityRunner(
-            testLogProcessor,
-            testErrorProcessor,
-            testOutputDir
-        );
+        const errorRunner = new UnityRunner({
+            stdoutLogProcessor: testLogProcessor,
+            stderrLogProcessor: testErrorProcessor,
+            outputLogDir: testOutputDir
+        });
 
         const exitCode = await errorRunner.runUnityBatchmode();
         await errorRunner.cleanup();

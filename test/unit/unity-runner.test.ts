@@ -15,12 +15,20 @@ describe('UnityRunner', () => {
     });
 
     it('should construct with default values', () => {
-        const runner = new UnityRunner(mockStdoutProcessor, mockStderrProcessor);
+        const runner = new UnityRunner({
+            stdoutLogProcessor: mockStdoutProcessor,
+            stderrLogProcessor: mockStderrProcessor
+        });
         expect(runner).toBeDefined();
     });
 
     it('should construct with custom values', () => {
-        const runner = new UnityRunner(mockStdoutProcessor, mockStderrProcessor, './test-output', 'echo');
+        const runner = new UnityRunner({
+            stdoutLogProcessor: mockStdoutProcessor,
+            stderrLogProcessor: mockStderrProcessor,
+            outputLogDir: './test-output',
+            unityExecutable: 'echo'
+        });
         expect(runner).toBeDefined();
     });
 });

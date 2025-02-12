@@ -98,6 +98,9 @@ export class UnityRunner {
 
         childProcess.stderr.on("error", (error) => {
             const errorStr = this.stderrLogProcessor.process(error);
+
+            if (errorStr.length === 0) return;
+
             console.error(errorStr);
 
             try {
@@ -115,6 +118,9 @@ export class UnityRunner {
         childProcess.stdout.on("data", (data) => {
             const dataString = data.toString();
             const outputStr = this.stdoutLogProcessor.process(dataString);
+
+            if (outputStr.length === 0) return;
+            
             console.log(outputStr);
 
             try {

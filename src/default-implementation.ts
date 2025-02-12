@@ -68,17 +68,22 @@ export class DefaultLogProcessor extends LogProcessor {
         private readonly validator?: LogValidator
     ) {
         super((outputStr: string): string => {
+            outputStr = outputStr.trim();
+            if (outputStr.length === 0) return outputStr;
+
             const headlineEndIndex = outputStr.indexOf("\n");
             const headline = headlineEndIndex > 0
                 ? outputStr.slice(0, headlineEndIndex).trim()
-                : outputStr.trim();
+                : outputStr;
     
             if (this.validator?.lookup(outputStr))
                 this.validator.push(headline);
-    
+
             const body = outputStr.slice(headlineEndIndex + 1).trim();
-    
-            return `${headerPrefix}${headline}${headerSuffix}\n${body}`;
+
+            return body.length > 0
+                ? `${headerPrefix}${headline}${headerSuffix}\n${body}`
+                : headline;
         });
     }
 }
