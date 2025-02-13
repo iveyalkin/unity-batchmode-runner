@@ -16,16 +16,24 @@ export interface ILogInsight {
 
 export class LogProcessor implements unity.ILogProcessor {
     constructor(
-        public readonly process: (outputStr: string) => string,
-    ) 
-    {}
+        public readonly process: (dataStr: string) => string,
+    ) { }
 }
 
-export class ErrorLogProcessor implements unity.IErrorLogProcessor {
-    constructor(
-        public readonly process: (error: Error) => string,
-    ) 
-    {}
+export class SimpleValidator implements ILogInsight {
+    private readonly insights: string[] = [];
+
+    getInsights(): string[] {
+        return this.insights;
+    }
+
+    push(insight: string): void {
+        this.insights.push(insight);
+    }
+
+    lookup(outputStr: string): boolean {
+        return outputStr.length > 0;
+    }
 }
 
 export class LogValidator implements ILogInsight {
@@ -36,7 +44,7 @@ export class LogValidator implements ILogInsight {
         private readonly rule?: RegExp
     ) {
         this.keywords = keywords
-            ? [ ...new Set(keywords?.map(kw => kw.toLowerCase()))]
+            ? [...new Set(keywords?.map(kw => kw.toLowerCase()))]
             : keywords;
     }
 
@@ -61,42 +69,34 @@ export class LogValidator implements ILogInsight {
     }
 }
 
+export class DefaultLogProcessorArgs {
+    validator?: ILogInsight;
+    formatter?: (header: string, body?: string) => string;
+}
+
 export class DefaultLogProcessor extends LogProcessor {
-    constructor(
-        headerPrefix: string = "",
-        headerSuffix: string = "",
-        private readonly validator?: LogValidator
-    ) {
+    constructor(args: DefaultLogProcessorArgs = new DefaultLogProcessorArgs()) {
         super((outputStr: string): string => {
+            outputStr = outputStr.trim();
+            if (outputStr.length === 0) return outputStr;
+
             const headlineEndIndex = outputStr.indexOf("\n");
             const headline = headlineEndIndex > 0
                 ? outputStr.slice(0, headlineEndIndex).trim()
-                : outputStr.trim();
-    
-            if (this.validator?.lookup(outputStr))
-                this.validator.push(headline);
-    
-            const body = outputStr.slice(headlineEndIndex + 1).trim();
-    
-            return `${headerPrefix}${headline}${headerSuffix}\n${body}`;
-        });
-    }
-}
+                : outputStr;
 
-export class DefaultErrorLogProcessor extends ErrorLogProcessor {
-    constructor(
-        headerPrefix: string = "",
-        headerSuffix: string = "",
-        private readonly validator?: ILogInsight
-    ) {
-        super((error: Error): string => {
-            const header = error.message;
-            const body = error.stack;
-    
-            if (this.validator?.lookup(header))
-                this.validator.push(header);
-    
-            return `${headerPrefix}${header}${headerSuffix}\n${body}`;
+            if (args.validator?.lookup(outputStr))
+                args.validator.push(headline);
+
+            if (headlineEndIndex <= 0 || headlineEndIndex === outputStr.length - 1)
+                return args.formatter
+                    ? args.formatter(headline)
+                    : `${headline}\n`;
+
+            const body = outputStr.slice(headlineEndIndex + 1).trim();
+            return args.formatter
+                ? args.formatter(headline, body)
+                : `${headline}\n${body}\n`;
         });
     }
 }
