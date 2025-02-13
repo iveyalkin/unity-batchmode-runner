@@ -1,14 +1,18 @@
 {
     "name": "@op6yz/unity-batchmode-runner",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "description": "Unity batchmode runner, that wraps Unity3D batchmode CLI handling stdout and stderr",
     "main": "dist/main.js",
+    "author": {
+        "name": "IV",
+        "email": "iv.conduct@gmail.com"
+    },
     "bin": {
         "unity-batchmode-runner": "dist/main.js"
     },
     "scripts": {
         "build": "tsc -p tsconfig.build.json",
-        "pb": "tsc -p tsconfig.build.json && publish",
+        "pb": "tsc -p tsconfig.build.json && npm publish",
         "exec": "tsc -p tsconfig.build.json && node ./dist/main.js",
         "test": "jest",
         "test:watch": "jest --watch",
@@ -19,7 +23,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/iveyalkin/unity-batchmode-runner.git"
+        "url": "git+https://github.com/iveyalkin/unity-batchmode-runner.git"
     },
     "devDependencies": {
         "@types/jest": "^26.0.15",

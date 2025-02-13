@@ -1,19 +1,16 @@
 import fs from "fs";
-import { spawn, SpawnOptionsWithStdioTuple, StdioPipe, StdioNull } from "child_process";
+import { spawn, SpawnOptionsWithStdioTuple, StdioPipe, StdioNull, ChildProcess } from "child_process";
+import * as process from "process";
 import path from "path";
 import * as stream from "stream";
 
 export interface ILogProcessor {
-    process(outputStr: string): string;
-}
-
-export interface IErrorLogProcessor {
-    process(error: Error): string;
+    process(dataStr: string): string;
 }
 
 export interface UnityRunnerOptions {
     stdoutLogProcessor: ILogProcessor;
-    stderrLogProcessor: IErrorLogProcessor;
+    stderrLogProcessor: ILogProcessor;
     unityExecutable?: string;
     outputLogDir?: string;
     stdoutLog?: stream.Writable;
@@ -22,11 +19,13 @@ export interface UnityRunnerOptions {
 }
 
 export class UnityRunner {
-    private readonly stdoutLogProcessor: ILogProcessor;
-    private readonly stderrLogProcessor: IErrorLogProcessor;
+    private readonly stdoutTransformer: stream.Transform;
+    private readonly stderrTransformer: stream.Transform;
     private readonly unityCommand: string = process.env.UNITY_PATH ?? "unity";
     private readonly stdoutLog: stream.Writable;
     private readonly stderrLog: stream.Writable;
+
+    private childProcess?: ChildProcess;
 
     private readonly spawnOptions: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe> = {
         detached: false,
@@ -43,9 +42,25 @@ export class UnityRunner {
         unityExecutable = process.env.UNITY_EXECUTABLE ?? "unity",
         shell = false
     }: UnityRunnerOptions) {
-        this.stdoutLogProcessor = stdoutLogProcessor;
-        this.stderrLogProcessor = stderrLogProcessor;
         this.unityCommand = unityExecutable ?? this.unityCommand;
+
+        this.stdoutTransformer = new stream.Stream.Transform({
+            autoDestroy: true,
+            transform: function (chunk: Buffer, _, callback: stream.TransformCallback) {
+                const dataString = chunk.toString();
+                const outputStr = stdoutLogProcessor.process(dataString);
+                callback(null, outputStr);
+            }
+        });
+
+        this.stderrTransformer = new stream.Stream.Transform({
+            autoDestroy: true,
+            transform: function (chunk: Buffer, _, callback: stream.TransformCallback) {
+                const dataString = chunk.toString();
+                const outputStr = stderrLogProcessor.process(dataString);
+                callback(null, outputStr);
+            }
+        });
 
         const outDirPath = fs.mkdirSync(outputLogDir, { recursive: true }) ?? outputLogDir;
         this.stdoutLog = stdoutLog
@@ -58,39 +73,13 @@ export class UnityRunner {
         this.spawnOptions.shell = shell;
     }
 
-    public async cleanup(): Promise<void> {
-        const promises: Promise<void>[] = [];
-
-        if (this.stdoutLog) {
-            promises.push(
-                new Promise<void>((resolve) => {
-                    try {
-                        this.stdoutLog.end(() => resolve());
-                    } catch (exception) {
-                        process.stderr.write(`Failed to close stdout.log: ${exception}\n`);
-                        resolve();
-                    }
-                })
-            );
-        }
-
-        if (this.stderrLog) {
-            promises.push(
-                new Promise<void>((resolve) => {
-                    try {
-                        this.stderrLog.end(() => resolve());
-                    } catch (exception) {
-                        process.stderr.write(`Failed to close stderr.log: ${exception}\n`);
-                        resolve();
-                    }
-                })
-            );
-        }
-
-        await Promise.all(promises);
+    public getUnityProcess(): ChildProcess | undefined {
+        return this.childProcess;
     }
 
     public async runUnityBatchmode(args?: string[]): Promise<number> {
+        process.stdout.write(`Running Unity Batchmode. Executor version: ${require("../package.json").version}\n`);
+
         const processArgs = ["-batchmode"];
         if (args) {
             processArgs.push(...args.map(arg => `-${arg.trim()}`));
@@ -101,60 +90,108 @@ export class UnityRunner {
         childProcess.stdout.setEncoding('utf8');
         childProcess.stderr.setEncoding('utf8');
 
-        childProcess.stderr.on("error", (error) => {
-            const errorStr = this.stderrLogProcessor.process(error);
+        console.log("child process pid: %d.", childProcess.pid);
 
-            if (errorStr.length === 0) return;
+        const stdoutRepeater = new stream.PassThrough({ autoDestroy: true });
+        stdoutRepeater.on('error', (error) => console.error('Stream error:', error));
 
-            process.stderr.write(errorStr);
+        childProcess.stdout.pipe(stdoutRepeater);
+        stdoutRepeater.pipe(this.stdoutLog);
+        stdoutRepeater.pipe(this.stdoutTransformer).pipe(process.stdout);
 
-            try {
-                if (!this.stderrLog.write(`${error}`, (subError) => {
-                    if (subError)
-                        process.stderr.write(`Failed to write to stderr.log: ${subError}\n`);
-                })) {
-                    process.stderr.write("Failed to write to stderr.log\n");
-                }
-            } catch (exception) {
-                process.stderr.write(`Failed to write to stderr.log: ${exception}\n`);
-            }
-        });
+        const stderrRepeater = new stream.PassThrough({ autoDestroy: true });
+        stderrRepeater.on('error', (error) => console.error('Stream error:', error));
 
-        childProcess.stdout.on("data", (data) => {
-            const dataString = data.toString();
-            const outputStr = this.stdoutLogProcessor.process(dataString);
+        childProcess.stderr.pipe(stderrRepeater);
+        stderrRepeater.pipe(this.stderrLog);
+        stderrRepeater.pipe(this.stderrTransformer).pipe(process.stdout);
 
-            if (outputStr.length === 0) return;
+        return await this.awaitChildProcess(childProcess);
+    }
 
-            process.stdout.write(outputStr);
+    private async awaitChildProcess(childProcess: ChildProcess): Promise<number> {
+        const promises: Promise<number>[] = [];
+        promises.push(new Promise<number>((resolve, _) => {
+            let stdoutClosed = false;
+            childProcess.stdout!.on("close", () => {
+                if (stdoutClosed) return;
+                stdoutClosed = true;
+                resolve(0);
+            });
 
-            try {
-                if (!this.stdoutLog.write(dataString, (subError) => {
-                    if (subError)
-                        process.stderr.write(`Failed to write to stdout.log: ${subError}\n`);
-                })) {
-                    process.stderr.write("Failed to write to stdout.log\n");
-                }
-            } catch (exception) {
-                process.stderr.write(`Failed to write to stdout.log: ${exception}\n`);
-            }
-        });
+            childProcess.stdout!.on("error", () => {
+                if (stdoutClosed) return;
+                stdoutClosed = true;
+                resolve(0);
+            });
+        }));
 
-        return await new Promise((resolve, _) => {
+        promises.push(new Promise<number>((resolve, _) => {
+            let stderrClosed = false;
+            childProcess.stderr!.on("close", () => {
+                if (stderrClosed) return;
+                stderrClosed = true;
+                resolve(0);
+            });
+
+            childProcess.stderr!.on("error", () => {
+                if (stderrClosed) return;
+                stderrClosed = true;
+                resolve(0);
+            });
+        }));
+
+        if (this.stdoutLog) {
+            promises.push(
+                new Promise<number>((resolve) => {
+                    try {
+                        this.stdoutLog.end(() => resolve(0));
+                    } catch (exception) {
+                        process.stderr.write(`Failed to close stdout.log: ${exception}\n`);
+                        resolve(0);
+                    }
+                })
+            );
+        }
+
+        if (this.stderrLog) {
+            promises.push(
+                new Promise<number>((resolve) => {
+                    try {
+                        this.stderrLog.end(() => resolve(0));
+                    } catch (exception) {
+                        process.stderr.write(`Failed to close stderr.log: ${exception}\n`);
+                        resolve(0);
+                    }
+                })
+            );
+        }
+
+        promises.push(new Promise<number>((resolve, _) => {
             childProcess.on("exit", (code) => {
-                process.stdout.write(`Unity Batchmode process exited with code ${code}\n`);
+                console.log(`Unity Batchmode process exited with code ${code}`);
+
                 if (code !== null) {
                     resolve(code);
                 } else {
-                    process.stdout.write("Unity Batchmode process exited with undefined code. Default to 0\n");
+                    console.log("Unity Batchmode process exited with undefined code. Default to 0");
+
                     resolve(0);
                 }
             });
 
             childProcess.on("error", (error) => {
-                process.stderr.write(`Error: ${error}\n`);
+                console.error("Child process error:", error);
                 resolve(-1);
             });
-        });
+        }));
+
+        try {
+            this.childProcess = childProcess;
+
+            return (await Promise.all(promises)).reduce((acc, code) => acc + code, 0);
+        } finally {
+            this.childProcess = undefined;
+        }
     }
 }
