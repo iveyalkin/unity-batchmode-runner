@@ -5,7 +5,7 @@ import * as processors from "./default-implementation";
 
 main().catch(err => {
     console.error(err);
-    process.exit(1);
+    process.exitCode = 1;
 });
 
 async function main() {
