@@ -1,5 +1,5 @@
 ### 0.3.0
-- Handle null return code as UNSUCCESS
+- Handle null return code as an execution FAILURE
 
 ### 0.2.0
 - Overhall API and address bugs and requirements during field testing on a real project
