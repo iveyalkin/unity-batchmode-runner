@@ -174,9 +174,9 @@ export class UnityRunner {
                 if (code !== null) {
                     resolve(code);
                 } else {
-                    console.log("Unity Batchmode process exited with undefined code. Default to 0");
+                    console.log("Unity Batchmode process exited with undefined code. Default to -1");
 
-                    resolve(0);
+                    resolve(-1);
                 }
             });
 
