@@ -1,6 +1,6 @@
 {
     "name": "@op6yz/unity-batchmode-runner",
-    "version": "0.3.0-rc1",
+    "version": "0.3.0",
     "description": "Unity batchmode runner, that wraps Unity3D batchmode CLI handling stdout and stderr",
     "main": "dist/main.js",
     "author": {
